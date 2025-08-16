@@ -6,3 +6,4 @@ plotly
 pandas
 numpy
 python-dotenv
+langchain-community
