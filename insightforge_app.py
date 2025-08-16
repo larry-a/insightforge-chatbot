@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from dotenv import load_dotenv
 import openai
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain, LLMChain, SimpleSequentialChain
 from langchain.prompts import PromptTemplate
