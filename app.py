@@ -24,19 +24,14 @@ def setup_openai():
         openai.api_key = api_key
         return True
     except KeyError:
-        st.error("Please add your OPENAI_API_KEY to Streamlit secrets")
+        st.warning("⚠️ OpenAI API key not found. You can still view data analysis, but AI chat will be limited.")
+        st.info("To enable full AI features, add your OPENAI_API_KEY to Streamlit secrets in app settings.")
         return False
 
 # CORE DATA PROCESSING
 @st.cache_data
-def load_and_process_data():
-    """REQUIREMENT 1: Data preparation and processing"""
-    uploaded_file = st.file_uploader(
-        "Upload your business data CSV file", 
-        type=['csv'],
-        help="Upload your sales data CSV for comprehensive analysis"
-    )
-    
+def process_uploaded_data(uploaded_file):
+    """REQUIREMENT 1: Data preparation and processing (without widget)"""
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
@@ -60,6 +55,16 @@ def load_and_process_data():
             return None
     
     return None
+
+def load_and_process_data():
+    """File uploader function (not cached)"""
+    uploaded_file = st.file_uploader(
+        "Upload your business data CSV file", 
+        type=['csv'],
+        help="Upload your sales data CSV for comprehensive analysis"
+    )
+    
+    return process_uploaded_data(uploaded_file)
 
 def advanced_data_summary(df):
     """REQUIREMENT 3: Advanced data summary with all required metrics"""
@@ -141,6 +146,10 @@ def create_custom_retriever(df):
 def generate_ai_response(question, context, conversation_history):
     """Generate AI response using OpenAI with context and memory"""
     try:
+        # Check if OpenAI is available
+        if not hasattr(openai, 'api_key') or not openai.api_key:
+            return "🤖 AI response requires OpenAI API key. Based on the data context provided, here's a summary: " + context[:300] + "..."
+        
         # Create conversation context
         full_context = f"""
 You are a helpful business intelligence assistant analyzing sales data.
@@ -168,7 +177,7 @@ Provide a comprehensive, insightful answer based on the data shown above. Includ
         
         return response.choices[0].message.content
     except Exception as e:
-        return f"Error generating response: {str(e)}. Please check your OpenAI API key and try again."
+        return f"🤖 AI response not available. Here's the data context: {context[:500]}..."
 
 def run_model_evaluation(df):
     """REQUIREMENT 7: Model evaluation"""
@@ -289,9 +298,8 @@ def main():
     st.title("📊 InsightForge - AI Business Intelligence Assistant")
     st.write("🚀 **Complete Capstone Implementation** - Advanced analytics with AI-powered insights, custom retrieval, and comprehensive visualizations")
 
-    # Setup OpenAI
-    if not setup_openai():
-        st.stop()
+    # Setup OpenAI (optional for demo)
+    openai_available = setup_openai()
 
     # Load data
     df = load_and_process_data()
