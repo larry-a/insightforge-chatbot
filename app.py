@@ -191,21 +191,1990 @@ def execute_chained_analysis(question, retriever, history):
     # Step 2: Execute prompt chain (internal processing)
     analysis_step, pattern_step, insight_step, final_response = create_prompt_chain_analysis(question, context, history)
     
-    # Step 3: Build clean response
-    response = f"**Analysis for: {question}**\n\n"
-    
-    # Add retrieved context
-    response += f"**Data Context:**\n{context}\n"
-    
-    # Add targeted business insights based on question type
+    # Step 3: Analyze the data to answer the specific question
     question_lower = question.lower()
     
-    if 'total' in question_lower and 'sales' in question_lower:
-        response += "**Business Analysis:**\n"
-        response += "This shows overall sales performance across the dataset. "
-        response += "Key metrics indicate business health and revenue generation patterns."
+    # Build response with specific answer
+    response = f"**Analysis for: {question}**\n\n"
     
-    elif 'region' in question_lower:
+    # Answer specific questions first
+    if 'highest' in question_lower and ('sales' in question_lower or 'year' in question_lower):
+        if 'YEARLY TRENDS:' in context:
+            # Parse yearly data to find highest
+            lines = context.split('\n')
+            max_sales = 0
+            best_year = None
+            for line in lines:
+                if 'Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main() in line and ':' in line:
+                    year_part = line.split(':')[0].strip()
+                    if year_part.isdigit():
+                        sales_part = line.split('Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main())[1].split(',')[0]
+                        try:
+                            sales_value = float(sales_part.replace(',', ''))
+                            if sales_value > max_sales:
+                                max_sales = sales_value
+                                best_year = year_part
+                        except:
+                            pass
+            
+            if best_year:
+                response += f"**Answer:** {best_year} had the highest sales with ${max_sales:,.2f}\n\n"
+            else:
+                response += "**Answer:** Unable to determine from available data\n\n"
+    
+    elif 'lowest' in question_lower and ('sales' in question_lower or 'year' in question_lower):
+        if 'YEARLY TRENDS:' in context:
+            # Parse yearly data to find lowest
+            lines = context.split('\n')
+            min_sales = float('inf')
+            worst_year = None
+            for line in lines:
+                if 'Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main() in line and ':' in line:
+                    year_part = line.split(':')[0].strip()
+                    if year_part.isdigit():
+                        sales_part = line.split('Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main())[1].split(',')[0]
+                        try:
+                            sales_value = float(sales_part.replace(',', ''))
+                            if sales_value < min_sales:
+                                min_sales = sales_value
+                                worst_year = year_part
+                        except:
+                            pass
+            
+            if worst_year:
+                response += f"**Answer:** {worst_year} had the lowest sales with ${min_sales:,.2f}\n\n"
+            else:
+                response += "**Answer:** Unable to determine from available data\n\n"
+    
+    elif 'best' in question_lower and 'region' in question_lower:
+        if 'REGIONAL ANALYSIS:' in context:
+            # Parse regional data to find best
+            lines = context.split('\n')
+            max_sales = 0
+            best_region = None
+            for line in lines:
+                if 'Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main() in line and ':' in line:
+                    region_part = line.split(':')[0].strip()
+                    sales_part = line.split('Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main())[1].split(',')[0]
+                    try:
+                        sales_value = float(sales_part.replace(',', ''))
+                        if sales_value > max_sales:
+                            max_sales = sales_value
+                            best_region = region_part
+                    except:
+                        pass
+            
+            if best_region:
+                response += f"**Answer:** {best_region} is the best performing region with ${max_sales:,.2f} in total sales\n\n"
+            else:
+                response += "**Answer:** Unable to determine from available data\n\n"
+    
+    elif 'best' in question_lower and 'product' in question_lower:
+        if 'PRODUCT ANALYSIS:' in context:
+            # Parse product data to find best
+            lines = context.split('\n')
+            max_sales = 0
+            best_product = None
+            for line in lines:
+                if 'Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main() in line and ':' in line:
+                    product_part = line.split(':')[0].strip()
+                    sales_part = line.split('Total=
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main())[1].split(',')[0]
+                    try:
+                        sales_value = float(sales_part.replace(',', ''))
+                        if sales_value > max_sales:
+                            max_sales = sales_value
+                            best_product = product_part
+                    except:
+                        pass
+            
+            if best_product:
+                response += f"**Answer:** {best_product} is the best performing product with ${max_sales:,.2f} in total sales\n\n"
+            else:
+                response += "**Answer:** Unable to determine from available data\n\n"
+    
+    elif 'total' in question_lower and 'sales' in question_lower:
+        if 'Total Sales: 
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main() in context:
+            total_sales_line = [line for line in context.split('\n') if 'Total Sales: 
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main() in line][0]
+            total_amount = total_sales_line.split('Total Sales: 
+
+# STEP 7: MEMORY INTEGRATION
+def initialize_memory():
+    """REQUIREMENT 6: Memory integration"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = ""
+
+def update_memory(question, response):
+    """Update conversation memory"""
+    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
+    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# STEP 8: MODEL EVALUATION
+def run_evaluation(df, retriever):
+    """REQUIREMENT 7: Model evaluation"""
+    
+    test_questions = [
+        "What are the total sales?",
+        "Which region performs best?",
+        "What's the average sales amount?",
+        "Show me customer demographics",
+        "Analyze sales trends over time"
+    ]
+    
+    results = []
+    for question in test_questions:
+        answer = execute_chained_analysis(question, retriever, "")
+        context = retriever(question)
+        has_data = len(context) > 50
+        
+        results.append({
+            'question': question,
+            'answer': answer[:150] + "...",
+            'context_retrieved': len(context),
+            'evaluation': 'PASS' if has_data else 'FAIL'
+        })
+    
+    return results
+
+# STEP 9: VISUALIZATIONS
+def create_charts(df, chart_type):
+    """REQUIREMENT 7: Data visualizations"""
+    
+    if chart_type == 'sales_trends' and 'Year' in df.columns:
+        yearly_sales = df.groupby('Year')['Sales'].sum()
+        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
+                    title="Sales Trends Over Time",
+                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'products' and 'Product' in df.columns:
+        product_sales = df.groupby('Product')['Sales'].sum()
+        fig = px.bar(x=product_sales.index, y=product_sales.values,
+                    title="Product Performance Comparison",
+                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'regions' and 'Region' in df.columns:
+        regional_sales = df.groupby('Region')['Sales'].sum()
+        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
+                    title="Regional Sales Analysis")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
+        demo_data = df.groupby('Age_Group').size()
+        fig = px.bar(x=demo_data.index, y=demo_data.values,
+                    title="Customer Demographics by Age Group",
+                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
+        st.plotly_chart(fig, use_container_width=True)
+
+# MAIN APPLICATION
+def main():
+    # Initialize everything
+    initialize_memory()
+    
+    # App title
+    st.title("InsightForge - AI Business Intelligence Assistant")
+    st.write("Complete Capstone Implementation with Prompt Chaining")
+    
+    # Load and process data
+    df = load_data()
+    summary = create_data_summary(df)
+    retriever = create_retriever(df)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Data Overview")
+        st.write(f"Records: {len(df):,}")
+        st.write(f"Columns: {len(df.columns)}")
+        
+        if 'Date' in df.columns:
+            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        
+        # Statistical measures
+        if 'stats' in summary:
+            st.subheader("Sales Statistics")
+            stats = summary['stats']
+            st.write(f"Mean: ${stats['mean']:,.2f}")
+            st.write(f"Median: ${stats['median']:,.2f}")
+            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        
+        # Analysis Features
+        st.header("Analysis Features")
+        
+        if st.button("Generate Business Insights"):
+            with st.spinner("Generating insights using prompt chains..."):
+                insights = execute_chained_analysis(
+                    "Provide comprehensive business insights and recommendations", 
+                    retriever, 
+                    st.session_state.conversation_history
+                )
+                st.success("Insights Generated!")
+                with st.expander("Business Insights"):
+                    st.write(insights)
+        
+        if st.button("Run System Evaluation"):
+            with st.spinner("Running evaluation..."):
+                eval_results = run_evaluation(df, retriever)
+                st.success("Evaluation Complete!")
+                with st.expander("Evaluation Results"):
+                    for result in eval_results:
+                        st.write(f"**Q:** {result['question']}")
+                        st.write(f"**A:** {result['answer']}")
+                        st.write(f"**Context:** {result['context_retrieved']} chars")
+                        st.write(f"**Status:** {result['evaluation']}")
+                        st.write("---")
+    
+    # Main chat interface
+    st.header("Chat with Your Data")
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask about your business data..."):
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Generate chained analysis response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing with prompt chains..."):
+                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history)
+                st.write(response)
+                
+                # Show relevant charts
+                prompt_lower = prompt.lower()
+                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
+                    create_charts(df, 'sales_trends')
+                elif 'product' in prompt_lower:
+                    create_charts(df, 'products')
+                elif 'region' in prompt_lower:
+                    create_charts(df, 'regions')
+                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
+                    create_charts(df, 'demographics')
+                
+                # Update memory
+                update_memory(prompt, response)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+
+if __name__ == "__main__":
+    main())[1]
+            response += f"**Answer:** Total sales are ${total_amount}\n\n"
+        else:
+            response += "**Answer:** Total sales information not available\n\n"
+    
+    # Add data context
+    response += f"**Data Context:**\n{context}\n"
+    
+    # Add general analysis based on question type
+    if 'region' in question_lower:
         response += "**Regional Analysis:**\n"
         response += "Geographic performance comparison reveals strengths and opportunities. "
         response += "Regional variations provide insights for strategic focus."
@@ -220,7 +2189,7 @@ def execute_chained_analysis(question, retriever, history):
         response += "Customer segmentation reveals target audience characteristics. "
         response += "Demographic insights support targeted strategies."
     
-    elif 'trend' in question_lower or 'time' in question_lower:
+    elif 'trend' in question_lower or 'time' in question_lower or 'year' in question_lower:
         response += "**Trend Analysis:**\n"
         response += "Time-based analysis reveals business trends and patterns. "
         response += "Historical data provides forecasting foundations."
