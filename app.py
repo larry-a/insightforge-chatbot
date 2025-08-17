@@ -191,7 +191,7 @@ def execute_chained_analysis(question, retriever, history):
     # Step 2: Execute prompt chain (internal processing)
     analysis_step, pattern_step, insight_step, final_response = create_prompt_chain_analysis(question, context, history)
     
-    # Step 3: Build clean response (no chain details shown)
+    # Step 3: Build clean response
     response = f"**Analysis for: {question}**\n\n"
     
     # Add retrieved context
@@ -203,38 +203,31 @@ def execute_chained_analysis(question, retriever, history):
     if 'total' in question_lower and 'sales' in question_lower:
         response += "**Business Analysis:**\n"
         response += "This shows overall sales performance across the dataset. "
-        response += "Key metrics indicate business health and revenue generation patterns.\n\n"
+        response += "Key metrics indicate business health and revenue generation patterns."
     
     elif 'region' in question_lower:
         response += "**Regional Analysis:**\n"
         response += "Geographic performance comparison reveals strengths and opportunities. "
-        response += "Regional variations provide insights for strategic focus.\n\n"
+        response += "Regional variations provide insights for strategic focus."
     
     elif 'product' in question_lower:
         response += "**Product Analysis:**\n"
         response += "Product performance analysis shows which offerings drive success. "
-        response += "Portfolio insights guide resource allocation decisions.\n\n"
+        response += "Portfolio insights guide resource allocation decisions."
     
     elif 'customer' in question_lower or 'demographic' in question_lower:
         response += "**Customer Analysis:**\n"
         response += "Customer segmentation reveals target audience characteristics. "
-        response += "Demographic insights support targeted strategies.\n\n"
+        response += "Demographic insights support targeted strategies."
     
     elif 'trend' in question_lower or 'time' in question_lower:
         response += "**Trend Analysis:**\n"
         response += "Time-based analysis reveals business trends and patterns. "
-        response += "Historical data provides forecasting foundations.\n\n"
+        response += "Historical data provides forecasting foundations."
     
     else:
-        response += "**Business Intelligence:**\n"
-        response += "Comprehensive data overview providing key performance insights. "
-        response += "Multiple metrics support informed decision-making.\n\n"
-    
-    # Add conversation context if available
-    if history:
-        response += "**Context:** Building on previous discussion insights.\n\n"
-    
-    response += "**Key Insight:** Data-driven analysis provides actionable business intelligence for strategic planning."
+        response += "**Business Analysis:**\n"
+        response += "Data analysis provides key performance insights for strategic decision-making."
     
     return response
 
