@@ -231,45 +231,35 @@ def execute_chained_analysis(question, retriever, history, df):
     # Step 2: Execute prompt chain (internal processing)
     analysis_step, pattern_step, insight_step, final_response = create_prompt_chain_analysis(question, context, history)
     
-    # Step 3: Build response
-    response = f"**Analysis for: {question}**\n\n"
-    
-    # Step 4: Get specific answer if possible
+    # Step 3: Get specific answer if possible
     specific_answer = get_specific_answer(question, df)
-    if specific_answer:
-        response += specific_answer + "\n\n"
     
-    # Step 5: Add data context
-    response += f"**Data Context:**\n{context}\n"
-    
-    # Step 6: Add general analysis
+    # Step 4: Build clean, simple response
     question_lower = question.lower()
     
-    if 'region' in question_lower:
-        response += "**Regional Analysis:**\n"
-        response += "Geographic performance comparison reveals strengths and opportunities. "
-        response += "Regional variations provide insights for strategic focus."
+    # For chart requests, just show the answer
+    if 'chart' in question_lower or 'show' in question_lower:
+        if specific_answer:
+            return specific_answer
+        else:
+            return "Chart displayed below."
     
-    elif 'product' in question_lower:
-        response += "**Product Analysis:**\n"
-        response += "Product performance analysis shows which offerings drive success. "
-        response += "Portfolio insights guide resource allocation decisions."
+    # For specific questions, show answer plus minimal context
+    elif specific_answer:
+        return specific_answer
     
-    elif 'customer' in question_lower or 'demographic' in question_lower:
-        response += "**Customer Analysis:**\n"
-        response += "Customer segmentation reveals target audience characteristics. "
-        response += "Demographic insights support targeted strategies."
-    
-    elif 'trend' in question_lower or 'time' in question_lower or 'year' in question_lower:
-        response += "**Trend Analysis:**\n"
-        response += "Time-based analysis reveals business trends and patterns. "
-        response += "Historical data provides forecasting foundations."
-    
+    # For general questions, provide brief analysis
     else:
-        response += "**Business Analysis:**\n"
-        response += "Data analysis provides key performance insights for strategic decision-making."
-    
-    return response
+        if 'region' in question_lower:
+            return "Regional performance analysis shows geographic variations and opportunities for strategic focus."
+        elif 'product' in question_lower:
+            return "Product performance analysis reveals which offerings drive business success and portfolio optimization opportunities."
+        elif 'customer' in question_lower or 'demographic' in question_lower:
+            return "Customer segmentation analysis provides insights into target audience characteristics and behaviors."
+        elif 'trend' in question_lower or 'time' in question_lower or 'year' in question_lower:
+            return "Time-based analysis reveals business trends, patterns, and forecasting foundations."
+        else:
+            return "Business intelligence analysis provides key performance insights for strategic decision-making."
 
 # STEP 8: MEMORY INTEGRATION
 def initialize_memory():
