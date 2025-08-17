@@ -129,7 +129,7 @@ Key Data Points Identified:
     
     # Extract key metrics from context
     if 'Total Sales:' in context:
-        total_match = context.split('Total Sales: $')[1].split('\n')[0] 
+        total_match = context.split('Total Sales: 
 
 # STEP 7: MEMORY INTEGRATION
 def initialize_memory():
