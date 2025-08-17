@@ -188,56 +188,55 @@ def execute_chained_analysis(question, retriever, history):
     # Step 1: Retrieve relevant data
     context = retriever(question)
     
-    # Step 2: Execute prompt chain
+    # Step 2: Execute prompt chain (internal processing)
     analysis_step, pattern_step, insight_step, final_response = create_prompt_chain_analysis(question, context, history)
     
-    # Step 3: Build comprehensive response
-    chained_response = f"PROMPT CHAIN ANALYSIS for: {question}\n\n"
-    chained_response += analysis_step
-    chained_response += pattern_step
-    chained_response += insight_step
-    chained_response += final_response
+    # Step 3: Build clean response (no chain details shown)
+    response = f"**Analysis for: {question}**\n\n"
     
     # Add retrieved context
-    chained_response += f"\nRetrieved Data Context:\n{context}\n"
+    response += f"**Data Context:**\n{context}\n"
     
-    # Add strategic recommendations
+    # Add targeted business insights based on question type
     question_lower = question.lower()
     
     if 'total' in question_lower and 'sales' in question_lower:
-        chained_response += "\nStrategic Recommendations:\n"
-        chained_response += "1. Performance Monitoring: Establish regular tracking\n"
-        chained_response += "2. Benchmark Analysis: Compare against standards\n"
-        chained_response += "3. Growth Strategy: Develop improvement initiatives\n"
-        chained_response += "4. Risk Management: Identify performance factors\n"
+        response += "**Business Analysis:**\n"
+        response += "This shows overall sales performance across the dataset. "
+        response += "Key metrics indicate business health and revenue generation patterns.\n\n"
     
     elif 'region' in question_lower:
-        chained_response += "\nStrategic Recommendations:\n"
-        chained_response += "1. Resource Allocation: Focus on high-performers\n"
-        chained_response += "2. Market Development: Expand in strong regions\n"
-        chained_response += "3. Performance Improvement: Address weak areas\n"
-        chained_response += "4. Best Practice Sharing: Transfer strategies\n"
+        response += "**Regional Analysis:**\n"
+        response += "Geographic performance comparison reveals strengths and opportunities. "
+        response += "Regional variations provide insights for strategic focus.\n\n"
     
     elif 'product' in question_lower:
-        chained_response += "\nStrategic Recommendations:\n"
-        chained_response += "1. Portfolio Optimization: Focus on top products\n"
-        chained_response += "2. Product Development: Enhance offerings\n"
-        chained_response += "3. Cross-Selling: Leverage strong products\n"
-        chained_response += "4. Market Positioning: Refine strategies\n"
+        response += "**Product Analysis:**\n"
+        response += "Product performance analysis shows which offerings drive success. "
+        response += "Portfolio insights guide resource allocation decisions.\n\n"
+    
+    elif 'customer' in question_lower or 'demographic' in question_lower:
+        response += "**Customer Analysis:**\n"
+        response += "Customer segmentation reveals target audience characteristics. "
+        response += "Demographic insights support targeted strategies.\n\n"
+    
+    elif 'trend' in question_lower or 'time' in question_lower:
+        response += "**Trend Analysis:**\n"
+        response += "Time-based analysis reveals business trends and patterns. "
+        response += "Historical data provides forecasting foundations.\n\n"
     
     else:
-        chained_response += "\nStrategic Recommendations:\n"
-        chained_response += "1. Data-Driven Decisions: Continue analytics use\n"
-        chained_response += "2. Performance Monitoring: Regular reviews\n"
-        chained_response += "3. Strategic Planning: Use insights for planning\n"
-        chained_response += "4. Continuous Improvement: Implement feedback\n"
+        response += "**Business Intelligence:**\n"
+        response += "Comprehensive data overview providing key performance insights. "
+        response += "Multiple metrics support informed decision-making.\n\n"
     
+    # Add conversation context if available
     if history:
-        chained_response += f"\nConversation Context: Building on previous discussions\n"
+        response += "**Context:** Building on previous discussion insights.\n\n"
     
-    chained_response += "\nMethodology: 4-step prompt chaining process used"
+    response += "**Key Insight:** Data-driven analysis provides actionable business intelligence for strategic planning."
     
-    return chained_response
+    return response
 
 # STEP 7: MEMORY INTEGRATION
 def initialize_memory():
