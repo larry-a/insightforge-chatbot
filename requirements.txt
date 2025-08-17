@@ -1,9 +1,6 @@
 streamlit
-langchain
-openai
-faiss-cpu
-plotly
 pandas
-numpy
-python-dotenv
-langchain-community
+openai==0.28.1
+matplotlib
+seaborn
+numpyy
