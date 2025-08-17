@@ -67,7 +67,7 @@ def create_data_summary(df):
 def create_retriever(df):
     """REQUIREMENT: Custom retriever to extract relevant statistics"""
     def get_context(question):
-        context = f"Dataset: {len(df)} records\n\n"
+        context = ""
         
         question_lower = question.lower()
         
