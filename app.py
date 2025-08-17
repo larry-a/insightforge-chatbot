@@ -57,14 +57,93 @@ def process_uploaded_data(uploaded_file):
     return None
 
 def load_and_process_data():
-    """File uploader function (not cached)"""
-    uploaded_file = st.file_uploader(
-        "Upload your business data CSV file", 
-        type=['csv'],
-        help="Upload your sales data CSV for comprehensive analysis"
-    )
+    """Auto-load sales_data.csv with option to upload custom data"""
     
-    return process_uploaded_data(uploaded_file)
+    # Check if user wants to upload custom data
+    if st.checkbox("📁 Upload your own data instead"):
+        uploaded_file = st.file_uploader(
+            "Upload your business data CSV file", 
+            type=['csv'],
+            help="Upload your sales data CSV for comprehensive analysis"
+        )
+        
+        return process_uploaded_data(uploaded_file)
+    
+    else:
+        # Auto-load sales_data.csv
+        try:
+            df = pd.read_csv('sales_data.csv')
+            if 'sales_data_loaded' not in st.session_state:
+                st.session_state.sales_data_loaded = True
+                st.success("✅ Loaded sales_data.csv successfully!")
+            return process_uploaded_data_direct(df)
+        except FileNotFoundError:
+            # Fallback to generated demo data if sales_data.csv not found
+            if 'demo_fallback_shown' not in st.session_state:
+                st.session_state.demo_fallback_shown = True
+                st.warning("⚠️ sales_data.csv not found in repository. Using generated demo data instead.")
+                st.info("💡 To use your actual data, add sales_data.csv to your GitHub repository.")
+            df = generate_sample_data()
+            return process_uploaded_data_direct(df)
+        except Exception as e:
+            # Fallback to generated demo data if any other error
+            if 'error_fallback_shown' not in st.session_state:
+                st.session_state.error_fallback_shown = True
+                st.error(f"Error loading sales_data.csv: {e}")
+                st.info("Using generated demo data instead.")
+            df = generate_sample_data()
+            return process_uploaded_data_direct(df)
+
+@st.cache_data
+def generate_sample_data():
+    """Generate realistic sample sales data for demo"""
+    np.random.seed(42)  # For reproducible results
+    
+    # Generate 1000 sample records
+    n_records = 1000
+    
+    # Date range
+    start_date = pd.to_datetime('2022-01-01')
+    end_date = pd.to_datetime('2024-12-31')
+    dates = pd.date_range(start_date, end_date, freq='D')
+    
+    # Sample data
+    data = {
+        'Date': np.random.choice(dates, n_records),
+        'Product': np.random.choice(['Widget A', 'Widget B', 'Widget C', 'Widget D'], n_records),
+        'Region': np.random.choice(['North', 'South', 'East', 'West'], n_records),
+        'Sales': np.random.normal(500, 150, n_records).round(2),
+        'Customer_Age': np.random.randint(18, 80, n_records),
+        'Customer_Gender': np.random.choice(['Male', 'Female'], n_records),
+        'Customer_Satisfaction': np.random.randint(1, 6, n_records)
+    }
+    
+    df = pd.DataFrame(data)
+    df['Sales'] = df['Sales'].abs()  # Ensure positive sales
+    
+    return df
+
+@st.cache_data
+def process_uploaded_data_direct(df):
+    """Process DataFrame directly (for preloaded data)"""
+    try:
+        # Process dates and create new columns
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            df['Year'] = df['Date'].dt.year
+            df['Month'] = df['Date'].dt.month
+            df['Quarter'] = df['Date'].dt.quarter
+
+        # Create age groups for customer segmentation
+        if 'Customer_Age' in df.columns:
+            bins = [18, 30, 50, 100]
+            labels = ['Young Adult', 'Middle Aged', 'Senior']
+            df['Age_Group'] = pd.cut(df['Customer_Age'], bins=bins, labels=labels, right=False)
+
+        return df
+    except Exception as e:
+        st.error(f"Error processing data: {e}")
+        return None
 
 def advanced_data_summary(df):
     """REQUIREMENT 3: Advanced data summary with all required metrics"""
