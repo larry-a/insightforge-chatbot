@@ -6,10 +6,6 @@ import seaborn as sns
 import plotly.express as px
 from openai import OpenAI
 
-# Clear cache when code changes to avoid issues
-if 'app_version' not in st.session_state:
-    st.session_state.app_version = 1
-
 st.set_page_config(page_title="InsightForge - AI Business Intelligence", layout="wide")
 
 @st.cache_data
