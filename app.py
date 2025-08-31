@@ -119,11 +119,22 @@ def create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_g
 
 @st.cache_resource
 def setup_langchain_client():
-    return ChatOpenAI(
-        model="gpt-3.5-turbo",
-        temperature=0,
-        openai_api_key=st.secrets["OPENAI_API_KEY"]
-    )
+    try:
+        api_key = st.secrets["OPENAI_API_KEY"]
+        # Debug info
+        st.write(f"🔑 API Key loaded: {api_key[:10]}...{api_key[-4:]}")
+        
+        return ChatOpenAI(
+            model="gpt-3.5-turbo",
+            temperature=0,
+            openai_api_key=api_key
+        )
+    except KeyError:
+        st.error("❌ OPENAI_API_KEY not found in secrets!")
+        st.stop()
+    except Exception as e:
+        st.error(f"❌ Error setting up OpenAI client: {str(e)}")
+        st.stop()
 
 def get_ai_response(question, context, client):
     prompt = f"""You are a business intelligence expert. Based on the data below, provide a clear, specific answer to the question.
@@ -135,9 +146,15 @@ Question: {question}
 
 Provide a detailed answer with specific numbers and insights:"""
     
-    message = HumanMessage(content=prompt)
-    response = client.invoke([message])
-    return response.content
+    try:
+        message = HumanMessage(content=prompt)
+        response = client.invoke([message])
+        return response.content
+    except Exception as e:
+        if "invalid api key" in str(e).lower():
+            return f"❌ API Key Error: {str(e)}\n\nPlease check that your OpenAI API key is valid and has available credits."
+        else:
+            return f"❌ Error: {str(e)}"
 
 def create_chart(df, chart_type):
     if chart_type == 'yearly':
@@ -169,9 +186,13 @@ def main():
     # Check if OpenAI API key exists
     try:
         client = setup_langchain_client()
+        # Test the API key with a simple call
+        test_message = HumanMessage(content="Hello")
+        test_response = client.invoke([test_message])
+        st.success("✅ OpenAI API connection successful!")
     except Exception as e:
-        st.error("❌ OpenAI API key not configured properly!")
-        st.info("Please add your OPENAI_API_KEY to .streamlit/secrets.toml")
+        st.error(f"❌ OpenAI API key error: {str(e)}")
+        st.info("Please check your API key in .streamlit/secrets.toml and ensure it has available credits")
         return
     
     yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year = create_analysis_data(df)
@@ -184,16 +205,19 @@ def main():
         with st.spinner("Processing your question..."):
             try:
                 response = get_ai_response(user_question, context, client)
-                st.success("✅ Response generated!")
-                st.write("**Answer:**")
-                st.write(response)
+                if response.startswith("❌"):
+                    st.error(response)
+                else:
+                    st.success("✅ Response generated!")
+                    st.write("**Answer:**")
+                    st.write(response)
                 
                 # Also show some basic chart
                 st.subheader("Sales Visualization")
                 create_chart(df, 'yearly')
                 
             except Exception as e:
-                st.error(f"❌ Error generating response: {str(e)}")
+                st.error(f"❌ Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
     main()
