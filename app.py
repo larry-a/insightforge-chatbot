@@ -9,6 +9,20 @@ from langchain_core.messages import HumanMessage
 
 st.set_page_config(page_title="InsightForge - AI Business Intelligence", layout="wide")
 
+# EVALUATION DATASET
+EVAL_DATASET = [
+    {'question': 'What were the total sales in 2022?', 'answer': '200657'},
+    {'question': 'What was the average sales in 2028?', 'answer': '581.265372'},
+    {'question': 'Which region had the highest total sales in 2026?', 'answer': 'West'},
+    {'question': 'What were the total sales for Widget A in the North region in 2024?', 'answer': '18447.0'},
+    {'question': 'What was the total sales for Middle Aged females?', 'answer': '273800'},
+    {'question': 'How many customers are in the East region?', 'answer': '589'},
+    {'question': 'What was the median sales in 2027?', 'answer': '519.0'},
+    {'question': 'What was the average sales for males?', 'answer': '547.563505'},
+    {'question': 'Which region had the lowest average sales?', 'answer': 'East'},
+    {'question': 'What were the total sales in November 2028?', 'answer': '3212'}
+]
+
 @st.cache_data
 def load_data():
     df = pd.read_csv('sales_data.csv')
