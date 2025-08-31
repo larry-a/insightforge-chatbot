@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-import openai
+from openai import OpenAI
 
 # Clear cache when code changes to avoid issues
 if 'app_version' not in st.session_state:
@@ -122,10 +122,9 @@ def create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_g
 
 @st.cache_resource
 def setup_openai_client():
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
-    return openai
+    return OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-def get_ai_response(question, context, openai_client):
+def get_ai_response(question, context, client):
     prompt = f"""You are a business intelligence expert. Based on the data below, provide a clear, specific answer to the question.
 
 Business Data:
@@ -135,7 +134,7 @@ Question: {question}
 
 Provide a detailed answer with specific numbers and insights:"""
     
-    response = openai_client.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
         temperature=0
@@ -164,12 +163,12 @@ def main():
     df = load_data()
     yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year = create_analysis_data(df)
     context = create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year)
-    openai_client = setup_openai_client()
+    client = setup_openai_client()
     
     st.subheader("Ask Your Question")
     user_question = st.text_input("Enter your question:")
     if user_question:
-        response = get_ai_response(user_question, context, openai_client)
+        response = get_ai_response(user_question, context, client)
         st.write(response)
 
 if __name__ == "__main__":
