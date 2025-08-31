@@ -181,12 +181,11 @@ def main():
         st.info("Add your OpenAI API key to Streamlit secrets or set OPENAI_API_KEY environment variable")
         return
     
-    # TEST API CONNECTION
+    # TEST API CONNECTION (hidden from user)
     try:
-        st.info("🔄 Testing API...")
         test_message = HumanMessage(content="Reply with 'Working'")
         test_response = client.invoke([test_message])
-        st.success("✅ API connection successful!")
+        # Connection successful - continue silently
     except Exception as e:
         st.error(f"❌ API test failed: {str(e)}")
         return
