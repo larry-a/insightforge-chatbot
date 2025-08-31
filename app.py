@@ -91,7 +91,11 @@ Standard deviation: ${df['Sales'].std():.2f}"""
 def setup_rag_system(documents):
     api_key = st.secrets["OPENAI_API_KEY"]
     embeddings = OpenAIEmbeddings(openai_api_key=api_key)
-    vectorstore = Chroma.from_documents(documents=documents, embedding=embeddings)
+    vectorstore = Chroma.from_documents(
+        documents=documents, 
+        embedding=embeddings,
+        persist_directory=None
+    )
     chat_model = ChatOpenAI(temperature=0, model="gpt-3.5-turbo", openai_api_key=api_key)
     return vectorstore, chat_model
 
@@ -130,59 +134,48 @@ def create_chart(df, chart_type):
         fig = px.imshow(demo_pivot, title="Sales by Demographics")
         st.plotly_chart(fig, use_container_width=True)
 
+@st.cache_resource
+def initialize_rag_system():
+    df = load_data()
+    documents = create_rag_documents(df)
+    vectorstore, chat_model = setup_rag_system(documents)
+    return df, vectorstore, chat_model
+
 def main():
     st.title("InsightForge - AI Business Intelligence")
     
-    if 'rag_setup' not in st.session_state:
-        st.session_state.rag_setup = False
+    df, vectorstore, chat_model = initialize_rag_system()
     
-    if not st.session_state.rag_setup:
-        if st.button("Initialize System"):
-            df = load_data()
-            documents = create_rag_documents(df)
-            vectorstore, chat_model = setup_rag_system(documents)
-            
-            st.session_state.df = df
-            st.session_state.vectorstore = vectorstore
-            st.session_state.chat_model = chat_model
-            st.session_state.rag_setup = True
-            st.rerun()
+    col1, col2, col3, col4 = st.columns(4)
     
-    if st.session_state.rag_setup:
-        df = st.session_state.df
-        vectorstore = st.session_state.vectorstore
-        chat_model = st.session_state.chat_model
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if st.button("Highest Yearly Sales"):
-                response = get_ai_response("Which year had the highest sales?", vectorstore, chat_model)
-                st.write(response)
-                create_chart(df, 'yearly')
-        
-        with col2:
-            if st.button("Best Performing Product"):
-                response = get_ai_response("Which product performs best?", vectorstore, chat_model)
-                st.write(response)
-                create_chart(df, 'products')
-        
-        with col3:
-            if st.button("Statistical Data"):
-                response = get_ai_response("Show me statistical analysis of sales", vectorstore, chat_model)
-                st.write(response)
-        
-        with col4:
-            if st.button("Demographic Insights"):
-                response = get_ai_response("What demographic insights can you provide?", vectorstore, chat_model)
-                st.write(response)
-                create_chart(df, 'demographics')
-        
-        st.subheader("Ask Your Own Question")
-        user_question = st.text_input("Enter your question:")
-        if st.button("Get Answer") and user_question:
-            response = get_ai_response(user_question, vectorstore, chat_model)
+    with col1:
+        if st.button("Highest Yearly Sales"):
+            response = get_ai_response("Which year had the highest sales?", vectorstore, chat_model)
             st.write(response)
+            create_chart(df, 'yearly')
+    
+    with col2:
+        if st.button("Best Performing Product"):
+            response = get_ai_response("Which product performs best?", vectorstore, chat_model)
+            st.write(response)
+            create_chart(df, 'products')
+    
+    with col3:
+        if st.button("Statistical Data"):
+            response = get_ai_response("Show me statistical analysis of sales", vectorstore, chat_model)
+            st.write(response)
+    
+    with col4:
+        if st.button("Demographic Insights"):
+            response = get_ai_response("What demographic insights can you provide?", vectorstore, chat_model)
+            st.write(response)
+            create_chart(df, 'demographics')
+    
+    st.subheader("Ask Your Own Question")
+    user_question = st.text_input("Enter your question:")
+    if st.button("Get Answer") and user_question:
+        response = get_ai_response(user_question, vectorstore, chat_model)
+        st.write(response)
 
 if __name__ == "__main__":
     main()
