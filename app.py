@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
 
 st.set_page_config(page_title="InsightForge - AI Business Intelligence", layout="wide")
 
@@ -117,8 +118,12 @@ def create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_g
     return context
 
 @st.cache_resource
-def setup_openai_client():
-    return OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+def setup_langchain_client():
+    return ChatOpenAI(
+        model="gpt-3.5-turbo",
+        temperature=0,
+        openai_api_key=st.secrets["OPENAI_API_KEY"]
+    )
 
 def get_ai_response(question, context, client):
     prompt = f"""You are a business intelligence expert. Based on the data below, provide a clear, specific answer to the question.
@@ -130,12 +135,9 @@ Question: {question}
 
 Provide a detailed answer with specific numbers and insights:"""
     
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-    return response.choices[0].message.content
+    message = HumanMessage(content=prompt)
+    response = client.invoke([message])
+    return response.content
 
 def create_chart(df, chart_type):
     if chart_type == 'yearly':
@@ -156,22 +158,42 @@ def create_chart(df, chart_type):
 def main():
     st.title("InsightForge - AI Business Intelligence")
     
-    df = load_data()
+    # Check if data file exists
+    try:
+        df = load_data()
+    except FileNotFoundError:
+        st.error("❌ sales_data.csv file not found! Please upload your data file.")
+        st.info("Your CSV should have columns: Date, Sales, Customer_Age, Product, Region, Customer_Gender, Customer_Satisfaction")
+        return
+    
+    # Check if OpenAI API key exists
+    try:
+        client = setup_langchain_client()
+    except Exception as e:
+        st.error("❌ OpenAI API key not configured properly!")
+        st.info("Please add your OPENAI_API_KEY to .streamlit/secrets.toml")
+        return
+    
     yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year = create_analysis_data(df)
     context = create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year)
-    client = setup_openai_client()
     
     st.subheader("Ask Your Question")
     user_question = st.text_input("Enter your question:")
     
     if user_question:
-        st.write("Processing your question...")
-        response = get_ai_response(user_question, context, client)
-        st.write("Response:")
-        st.write(response)
-        
-        # Also show some basic chart
-        create_chart(df, 'yearly')
+        with st.spinner("Processing your question..."):
+            try:
+                response = get_ai_response(user_question, context, client)
+                st.success("✅ Response generated!")
+                st.write("**Answer:**")
+                st.write(response)
+                
+                # Also show some basic chart
+                st.subheader("Sales Visualization")
+                create_chart(df, 'yearly')
+                
+            except Exception as e:
+                st.error(f"❌ Error generating response: {str(e)}")
 
 if __name__ == "__main__":
     main()
