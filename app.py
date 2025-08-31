@@ -121,14 +121,26 @@ def create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_g
 def setup_langchain_client():
     try:
         api_key = st.secrets["OPENAI_API_KEY"]
-        # Debug info
-        st.write(f"🔑 API Key loaded: {api_key[:10]}...{api_key[-4:]}")
         
-        return ChatOpenAI(
-            model="gpt-3.5-turbo",
-            temperature=0,
-            openai_api_key=api_key
-        )
+        # Try multiple initialization approaches
+        try:
+            # Method 1: Direct parameter
+            client = ChatOpenAI(
+                model="gpt-3.5-turbo",
+                temperature=0,
+                openai_api_key=api_key
+            )
+        except:
+            # Method 2: Set environment variable and retry
+            import os
+            os.environ["OPENAI_API_KEY"] = api_key
+            client = ChatOpenAI(
+                model="gpt-3.5-turbo",
+                temperature=0
+            )
+        
+        return client
+        
     except KeyError:
         st.error("❌ OPENAI_API_KEY not found in secrets!")
         st.stop()
@@ -186,13 +198,30 @@ def main():
     # Check if OpenAI API key exists
     try:
         client = setup_langchain_client()
+        
         # Test the API key with a simple call
-        test_message = HumanMessage(content="Hello")
+        st.info("🔄 Testing OpenAI API connection...")
+        test_message = HumanMessage(content="Say 'API test successful'")
         test_response = client.invoke([test_message])
         st.success("✅ OpenAI API connection successful!")
+        
     except Exception as e:
-        st.error(f"❌ OpenAI API key error: {str(e)}")
-        st.info("Please check your API key in .streamlit/secrets.toml and ensure it has available credits")
+        st.error(f"❌ OpenAI API error: {str(e)}")
+        
+        # Additional troubleshooting info
+        st.write("**Troubleshooting:**")
+        st.write("1. Verify your API key is valid at https://platform.openai.com/api-keys")
+        st.write("2. Check your OpenAI account has available credits")
+        st.write("3. Try regenerating your API key if it's old")
+        
+        # Show current key format for debugging
+        try:
+            api_key = st.secrets["OPENAI_API_KEY"]
+            st.write(f"Current key format: {api_key[:10]}...{api_key[-4:]}")
+            st.write(f"Key length: {len(api_key)} characters")
+        except:
+            st.write("Could not read API key from secrets")
+        
         return
     
     yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year = create_analysis_data(df)
