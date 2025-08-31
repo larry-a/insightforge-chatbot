@@ -4,8 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
-from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+import openai
 
 # Clear cache when code changes to avoid issues
 if 'app_version' not in st.session_state:
@@ -122,14 +121,12 @@ def create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_g
     return context
 
 @st.cache_resource
-def setup_chat_model():
-    api_key = st.secrets["OPENAI_API_KEY"]
-    return ChatOpenAI(temperature=0, model="gpt-3.5-turbo", openai_api_key=api_key)
+def setup_openai_client():
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    return openai
 
-def get_ai_response(question, context, chat_model):
-    prompt = PromptTemplate(
-        input_variables=["question", "context"],
-        template="""You are a business intelligence expert. Based on the data below, provide a clear, specific answer to the question.
+def get_ai_response(question, context, openai_client):
+    prompt = f"""You are a business intelligence expert. Based on the data below, provide a clear, specific answer to the question.
 
 Business Data:
 {context}
@@ -137,11 +134,13 @@ Business Data:
 Question: {question}
 
 Provide a detailed answer with specific numbers and insights:"""
-    )
     
-    formatted_prompt = prompt.format(question=question, context=context)
-    response = chat_model.invoke(formatted_prompt)
-    return response.content
+    response = openai_client.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+    return response.choices[0].message.content
 
 def create_chart(df, chart_type):
     if chart_type == 'yearly':
@@ -165,12 +164,12 @@ def main():
     df = load_data()
     yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year = create_analysis_data(df)
     context = create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year)
-    chat_model = setup_chat_model()
+    openai_client = setup_openai_client()
     
     st.subheader("Ask Your Question")
     user_question = st.text_input("Enter your question:")
     if user_question:
-        response = get_ai_response(user_question, context, chat_model)
+        response = get_ai_response(user_question, context, openai_client)
         st.write(response)
 
 if __name__ == "__main__":
