@@ -1,5 +1,5 @@
 # Install required packages first (run this cell first in Colab)
-%pip install --upgrade --quiet langchain langchain-community langchain-openai langchain-chroma openai
+#%pip install --upgrade --quiet langchain langchain-community langchain-openai langchain-chroma openai
 
 # Import libraries with corrected paths
 import os
