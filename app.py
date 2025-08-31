@@ -8,6 +8,7 @@ from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain.prompts import PromptTemplate
+import os
 
 st.set_page_config(page_title="InsightForge - AI Business Intelligence", layout="wide")
 
@@ -87,7 +88,8 @@ Standard deviation: ${df['Sales'].std():.2f}"""
     
     return documents
 
-def setup_rag_system(documents, api_key):
+def setup_rag_system(documents):
+    api_key = st.secrets["OPENAI_API_KEY"]
     embeddings = OpenAIEmbeddings(openai_api_key=api_key)
     vectorstore = Chroma.from_documents(documents=documents, embedding=embeddings)
     chat_model = ChatOpenAI(temperature=0, model="gpt-3.5-turbo", openai_api_key=api_key)
@@ -134,19 +136,17 @@ def main():
     if 'rag_setup' not in st.session_state:
         st.session_state.rag_setup = False
     
-    with st.sidebar:
-        st.header("Setup")
-        api_key = st.text_input("OpenAI API Key", type="password")
-        
-        if st.button("Initialize System") and api_key:
+    if not st.session_state.rag_setup:
+        if st.button("Initialize System"):
             df = load_data()
             documents = create_rag_documents(df)
-            vectorstore, chat_model = setup_rag_system(documents, api_key)
+            vectorstore, chat_model = setup_rag_system(documents)
             
             st.session_state.df = df
             st.session_state.vectorstore = vectorstore
             st.session_state.chat_model = chat_model
             st.session_state.rag_setup = True
+            st.rerun()
     
     if st.session_state.rag_setup:
         df = st.session_state.df
