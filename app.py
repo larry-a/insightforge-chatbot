@@ -163,9 +163,15 @@ def main():
     
     st.subheader("Ask Your Question")
     user_question = st.text_input("Enter your question:")
+    
     if user_question:
+        st.write("Processing your question...")
         response = get_ai_response(user_question, context, client)
+        st.write("Response:")
         st.write(response)
+        
+        # Also show some basic chart
+        create_chart(df, 'yearly')
 
 if __name__ == "__main__":
     main()
