@@ -208,9 +208,10 @@ def main():
                 st.write("**AI Answer:**")
                 st.write(response)
         
-        # Show visualization
-        st.subheader("Data Visualization")
-        create_chart(df, 'yearly')
+        # Show visualization only for yearly sales questions
+        if "year" in user_question.lower() or "yearly" in user_question.lower():
+            st.subheader("Data Visualization")
+            create_chart(df, 'yearly')
 
 if __name__ == "__main__":
     main()
