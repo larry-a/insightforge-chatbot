@@ -7,6 +7,7 @@ from langchain.docstore.document import Document
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.prompts import PromptTemplate
+import google.colab.userdata
 
 # Streamlit page configuration
 st.set_page_config(
@@ -29,14 +30,14 @@ if 'chat_model' not in st.session_state:
 with st.sidebar:
     st.header("🔧 Setup")
 
-    # API Key input
-    api_key = st.text_input("OpenAI API Key")
-
     # File upload
     uploaded_file = st.file_uploader("Upload Sales Data CSV", type=['csv'])
 
     # Setup button
     if st.button("Initialize System"):
+        # Get API Key from Colab secrets
+        api_key = google.colab.userdata.get('OPENAI_API_KEY')
+
         if api_key and uploaded_file:
             # Set API key
             import os
@@ -125,7 +126,7 @@ Lowest satisfaction: {sales_age_gender['Average_Customer_Satisfaction'].min():.2
 Highest average year: {sales_stats_by_year.loc[sales_stats_by_year['mean'].idxmax(), 'Year']}
 Lowest average year: {sales_stats_by_year.loc[sales_stats_by_year['mean'].idxmin(), 'Year']}
 Most volatile year: {sales_stats_by_year.loc[sales_stats_by_year['std'].idxmax(), 'Year']}
-Most stable year: {sales_stats_by_year.loc[sales_stats_by_year['std'].idxmin(), 'Year']}"""
+Most stable year: {sales_stats_by_year.loc[sales_stats_by_year['std'].min(), 'Year']}"""
 
             documents.append(Document(page_content=stats_doc, metadata={"source": "statistics"}))
 
