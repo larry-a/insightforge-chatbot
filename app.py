@@ -1,433 +1,466 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.express as px
+import numpy as np
+from langchain.docstore.document import Document
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_chroma import Chroma
+from langchain.prompts import PromptTemplate
 
-# PAGE CONFIG
+# Streamlit page configuration
 st.set_page_config(
-    page_title="InsightForge - AI Business Intelligence",
+    page_title="AI-Powered Business Intelligence Assistant",
     layout="wide"
 )
 
-# STEP 2: DATA PREPARATION
-@st.cache_data
-def load_data():
-    """REQUIREMENT 1: Data preparation"""
-    df = pd.read_csv('sales_data.csv')
-    
-    # Process dates
-    if 'Date' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'])
-        df['Year'] = df['Date'].dt.year
-        df['Month'] = df['Date'].dt.month
-    
-    # Create age groups
-    if 'Customer_Age' in df.columns:
-        bins = [18, 30, 50, 100]
-        labels = ['Young Adult', 'Middle Aged', 'Senior']
-        df['Age_Group'] = pd.cut(df['Customer_Age'], bins=bins, labels=labels)
-    
-    return df
+# Title and description
+st.title("AI-Powered Business Intelligence Assistant")
 
-# STEP 3: ADVANCED DATA SUMMARY
-def create_data_summary(df):
-    """REQUIREMENT 3: Advanced data summary"""
-    summary = {}
-    
-    # Sales performance by time period
-    if 'Sales' in df.columns and 'Year' in df.columns:
-        summary['yearly_sales'] = df.groupby('Year')['Sales'].sum()
-        summary['monthly_sales'] = df.groupby(['Year', 'Month'])['Sales'].sum()
-    
-    # Product and regional analysis
-    if 'Product' in df.columns:
-        summary['product_sales'] = df.groupby('Product')['Sales'].sum()
-    if 'Region' in df.columns:
-        summary['regional_sales'] = df.groupby('Region')['Sales'].sum()
-    
-    # Customer segmentation by demographics
-    if 'Customer_Gender' in df.columns and 'Age_Group' in df.columns:
-        summary['demographics'] = df.groupby(['Customer_Gender', 'Age_Group'])['Sales'].sum()
-    
-    # Statistical measures
-    if 'Sales' in df.columns:
-        summary['stats'] = {
-            'mean': df['Sales'].mean(),
-            'median': df['Sales'].median(),
-            'std': df['Sales'].std(),
-            'min': df['Sales'].min(),
-            'max': df['Sales'].max()
-        }
-    
-    return summary
+# Initialize session state for data and models
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
+if 'vectorstore' not in st.session_state:
+    st.session_state.vectorstore = None
+if 'chat_model' not in st.session_state:
+    st.session_state.chat_model = None
 
-# STEP 4: CUSTOM RETRIEVER
-def create_retriever(df):
-    """REQUIREMENT: Custom retriever to extract relevant statistics"""
-    def get_context(question):
-        context = ""
-        
-        question_lower = question.lower()
-        
-        if 'sales' in question_lower or 'total' in question_lower:
-            total_sales = df['Sales'].sum()
-            avg_sales = df['Sales'].mean()
-            median_sales = df['Sales'].median()
-            context += "SALES ANALYSIS:\n"
-            context += f"Total Sales: ${total_sales:,.2f}\n"
-            context += f"Average Sales: ${avg_sales:.2f}\n"
-            context += f"Median Sales: ${median_sales:.2f}\n\n"
-        
-        if 'region' in question_lower and 'Region' in df.columns:
-            regional_data = df.groupby('Region')['Sales'].agg(['sum', 'mean', 'count'])
-            context += "REGIONAL ANALYSIS:\n"
-            for region, data in regional_data.iterrows():
-                context += f"{region}: Total=${data['sum']:,.2f}, Avg=${data['mean']:.2f}, Records={data['count']}\n"
-            context += "\n"
-        
-        if 'product' in question_lower and 'Product' in df.columns:
-            product_data = df.groupby('Product')['Sales'].agg(['sum', 'mean', 'count'])
-            context += "PRODUCT ANALYSIS:\n"
-            for product, data in product_data.iterrows():
-                context += f"{product}: Total=${data['sum']:,.2f}, Avg=${data['mean']:.2f}, Records={data['count']}\n"
-            context += "\n"
-        
-        if 'customer' in question_lower or 'demographic' in question_lower:
-            if 'Age_Group' in df.columns:
-                demo_data = df.groupby('Age_Group').agg({'Sales': ['sum', 'mean', 'count']})
-                context += "CUSTOMER DEMOGRAPHICS:\n"
-                for age_group, data in demo_data.iterrows():
-                    total_val = data[('Sales', 'sum')]
-                    avg_val = data[('Sales', 'mean')]
-                    count_val = data[('Sales', 'count')]
-                    context += f"{age_group}: Total=${total_val:,.2f}, Avg=${avg_val:.2f}, Count={count_val}\n"
-                context += "\n"
-        
-        if 'year' in question_lower or 'time' in question_lower or 'trend' in question_lower:
-            if 'Year' in df.columns:
-                yearly_data = df.groupby('Year')['Sales'].agg(['sum', 'mean', 'count'])
-                context += "YEARLY TRENDS:\n"
-                for year, data in yearly_data.iterrows():
-                    context += f"{year}: Total=${data['sum']:,.2f}, Avg=${data['mean']:.2f}, Records={data['count']}\n"
-                context += "\n"
-        
-        return context
+# Sidebar for setup
+with st.sidebar:
+    st.header("🔧 Setup")
     
-    return get_context
-
-# STEP 5: CHAIN PROMPTS
-def create_prompt_chain_analysis(question, context, history):
-    """REQUIREMENT 4: Chain prompts for coherent responses"""
+    # API Key input
+    api_key = st.text_input("OpenAI API Key")
     
-    # Chain 1: Data Analysis
-    analysis_step = "CHAIN 1 - DATA ANALYSIS:\n"
-    analysis_step += f"Question: {question}\n"
-    analysis_step += "Key Data Points Identified:\n"
+    # File upload
+    uploaded_file = st.file_uploader("Upload Sales Data CSV", type=['csv'])
     
-    if 'SALES ANALYSIS:' in context:
-        analysis_step += "- Sales performance metrics detected\n"
-    if 'REGIONAL ANALYSIS:' in context:
-        analysis_step += "- Regional performance data available\n"
-    if 'PRODUCT ANALYSIS:' in context:
-        analysis_step += "- Product performance metrics identified\n"
-    if 'YEARLY TRENDS:' in context:
-        analysis_step += "- Time-based trends detected\n"
-    if 'CUSTOMER DEMOGRAPHICS:' in context:
-        analysis_step += "- Customer segmentation data available\n"
-    
-    # Chain 2: Pattern Recognition
-    pattern_step = "\nCHAIN 2 - PATTERN RECOGNITION:\n"
-    pattern_step += "Business Patterns Identified:\n"
-    
-    question_lower = question.lower()
-    if 'region' in question_lower:
-        pattern_step += "- Geographic performance variations detected\n"
-        pattern_step += "- Regional optimization opportunities identified\n"
-    elif 'product' in question_lower:
-        pattern_step += "- Product performance hierarchy established\n"
-        pattern_step += "- Product portfolio insights available\n"
-    elif 'time' in question_lower or 'trend' in question_lower:
-        pattern_step += "- Temporal patterns in business performance\n"
-        pattern_step += "- Seasonal or cyclical trends identified\n"
-    else:
-        pattern_step += "- Overall business performance patterns\n"
-        pattern_step += "- Cross-functional data relationships\n"
-    
-    # Chain 3: Strategic Insights
-    insight_step = "\nCHAIN 3 - STRATEGIC INSIGHTS:\n"
-    insight_step += "Business Implications:\n"
-    
-    if history:
-        insight_step += "- Building on previous discussion context\n"
-    
-    if 'total' in question_lower and 'sales' in question_lower:
-        insight_step += "- Overall business health assessment needed\n"
-        insight_step += "- Revenue optimization strategies required\n"
-    elif 'region' in question_lower:
-        insight_step += "- Geographic expansion or consolidation decisions\n"
-        insight_step += "- Regional resource allocation optimization\n"
-    elif 'product' in question_lower:
-        insight_step += "- Product portfolio management decisions\n"
-        insight_step += "- Product development focus areas\n"
-    elif 'customer' in question_lower:
-        insight_step += "- Customer segmentation strategy refinement\n"
-        insight_step += "- Targeted marketing programs\n"
-    
-    # Chain 4: Final Response
-    final_response = "\nCHAIN 4 - COMPREHENSIVE RESPONSE:\n"
-    final_response += "Actionable Business Intelligence:\n"
-    
-    return analysis_step, pattern_step, insight_step, final_response
-
-# STEP 6: ANSWER SPECIFIC QUESTIONS
-def get_specific_answer(question, df):
-    """Get specific answers to direct questions"""
-    question_lower = question.lower()
-    
-    if 'highest' in question_lower and 'sales' in question_lower and 'year' in question_lower:
-        if 'Year' in df.columns and 'Sales' in df.columns:
-            yearly_sales = df.groupby('Year')['Sales'].sum()
-            best_year = yearly_sales.idxmax()
-            best_sales = yearly_sales.max()
-            return f"**Answer:** {best_year} had the highest sales with ${best_sales:,.2f}"
-    
-    elif 'lowest' in question_lower and 'sales' in question_lower and 'year' in question_lower:
-        if 'Year' in df.columns and 'Sales' in df.columns:
-            yearly_sales = df.groupby('Year')['Sales'].sum()
-            worst_year = yearly_sales.idxmin()
-            worst_sales = yearly_sales.min()
-            return f"**Answer:** {worst_year} had the lowest sales with ${worst_sales:,.2f}"
-    
-    elif 'best' in question_lower and 'region' in question_lower:
-        if 'Region' in df.columns and 'Sales' in df.columns:
-            regional_sales = df.groupby('Region')['Sales'].sum()
-            best_region = regional_sales.idxmax()
-            best_sales = regional_sales.max()
-            return f"**Answer:** {best_region} is the best performing region with ${best_sales:,.2f} in total sales"
-    
-    elif 'best' in question_lower and 'product' in question_lower:
-        if 'Product' in df.columns and 'Sales' in df.columns:
-            product_sales = df.groupby('Product')['Sales'].sum()
-            best_product = product_sales.idxmax()
-            best_sales = product_sales.max()
-            return f"**Answer:** {best_product} is the best performing product with ${best_sales:,.2f} in total sales"
-    
-    elif 'total' in question_lower and 'sales' in question_lower:
-        if 'Sales' in df.columns:
-            total_sales = df['Sales'].sum()
-            return f"**Answer:** Total sales are ${total_sales:,.2f}"
-    
-    return None
-
-# STEP 7: CHAINED ANALYSIS
-def execute_chained_analysis(question, retriever, history, df):
-    """Enhanced analysis using prompt chaining"""
-    
-    # Step 1: Retrieve relevant data
-    context = retriever(question)
-    
-    # Step 2: Execute prompt chain (internal processing)
-    analysis_step, pattern_step, insight_step, final_response = create_prompt_chain_analysis(question, context, history)
-    
-    # Step 3: Get specific answer if possible
-    specific_answer = get_specific_answer(question, df)
-    
-    # Step 4: Build clean, simple response
-    question_lower = question.lower()
-    
-    # For chart requests, just show the answer
-    if 'chart' in question_lower or 'show' in question_lower:
-        if specific_answer:
-            return specific_answer
+    # Setup button
+    if st.button("Initialize System"):
+        if api_key and uploaded_file:
+            # Set API key
+            import os
+            os.environ['OPENAI_API_KEY'] = api_key
+            
+            # Load data
+            df = pd.read_csv(uploaded_file)
+            st.session_state.df = df
+            
+            # Initialize models
+            st.session_state.chat_model = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
+            embeddings = OpenAIEmbeddings()
+            
+            # Process data
+            df['Date'] = pd.to_datetime(df['Date'])
+            df['Year'] = df['Date'].dt.year
+            
+            # Create age groups
+            bins = [0, 18, 25, 35, 50, 65, np.inf]
+            labels = ['<18', '18-24', '25-34', '35-49', '50-64', '65+']
+            df['Age_Group'] = pd.cut(df['Customer_Age'], bins=bins, labels=labels, right=False)
+            
+            # Prepare analysis data
+            yearly_sales = df.groupby(['Year'])['Sales'].sum().reset_index()
+            product_sales = df.groupby('Product')['Sales'].sum().reset_index().sort_values('Sales', ascending=False)
+            regional_sales = df.groupby('Region')['Sales'].sum().reset_index().sort_values('Sales', ascending=False)
+            sales_age_gender = df.groupby(['Customer_Gender', 'Age_Group'], observed=True).agg(
+                Total_Sales=('Sales', 'sum'),
+                Average_Sales=('Sales', 'mean'),
+                Average_Customer_Satisfaction=('Customer_Satisfaction', 'mean')
+            ).reset_index()
+            sales_stats_by_year = df.groupby(['Year'])['Sales'].agg(['mean', 'median', 'std', 'min', 'max']).reset_index()
+            
+            # Store in session state
+            st.session_state.yearly_sales = yearly_sales
+            st.session_state.product_sales = product_sales
+            st.session_state.regional_sales = regional_sales
+            st.session_state.sales_age_gender = sales_age_gender
+            st.session_state.sales_stats_by_year = sales_stats_by_year
+            
+            # Create RAG documents
+            documents = []
+            
+            # Yearly sales document
+            max_year = yearly_sales.loc[yearly_sales['Sales'].idxmax(), 'Year']
+            max_sales = yearly_sales['Sales'].max()
+            min_year = yearly_sales.loc[yearly_sales['Sales'].idxmin(), 'Year']
+            min_sales = yearly_sales['Sales'].min()
+            
+            yearly_doc = f"""YEARLY SALES ANALYSIS:
+Best performing year: {max_year} with ${max_sales:,.2f}
+Worst performing year: {min_year} with ${min_sales:,.2f}
+Average yearly sales: ${yearly_sales['Sales'].mean():,.2f}
+Total years analyzed: {len(yearly_sales)}"""
+            
+            documents.append(Document(page_content=yearly_doc, metadata={"source": "yearly_sales"}))
+            
+            # Product performance document
+            top_product = product_sales.iloc[0]['Product']
+            top_product_sales = product_sales.iloc[0]['Sales']
+            bottom_product = product_sales.iloc[-1]['Product']
+            bottom_product_sales = product_sales.iloc[-1]['Sales']
+            
+            product_doc = f"""PRODUCT PERFORMANCE ANALYSIS:
+Best performing product: {top_product} with ${top_product_sales:,.2f}
+Worst performing product: {bottom_product} with ${bottom_product_sales:,.2f}
+Performance gap: ${top_product_sales - bottom_product_sales:,.2f}
+Total products: {len(product_sales)}"""
+            
+            documents.append(Document(page_content=product_doc, metadata={"source": "product_sales"}))
+            
+            # Demographics document
+            best_demo_idx = sales_age_gender['Total_Sales'].idxmax()
+            worst_demo_idx = sales_age_gender['Total_Sales'].idxmin()
+            
+            demo_doc = f"""DEMOGRAPHIC ANALYSIS:
+Best demographic: {sales_age_gender.loc[best_demo_idx, 'Customer_Gender']} {sales_age_gender.loc[best_demo_idx, 'Age_Group']} with ${sales_age_gender.loc[best_demo_idx, 'Total_Sales']:,.2f}
+Worst demographic: {sales_age_gender.loc[worst_demo_idx, 'Customer_Gender']} {sales_age_gender.loc[worst_demo_idx, 'Age_Group']} with ${sales_age_gender.loc[worst_demo_idx, 'Total_Sales']:,.2f}
+Highest satisfaction: {sales_age_gender['Average_Customer_Satisfaction'].max():.2f}
+Lowest satisfaction: {sales_age_gender['Average_Customer_Satisfaction'].min():.2f}"""
+            
+            documents.append(Document(page_content=demo_doc, metadata={"source": "demographics"}))
+            
+            # Statistics document
+            stats_doc = f"""STATISTICAL ANALYSIS:
+Highest average year: {sales_stats_by_year.loc[sales_stats_by_year['mean'].idxmax(), 'Year']}
+Lowest average year: {sales_stats_by_year.loc[sales_stats_by_year['mean'].idxmin(), 'Year']}
+Most volatile year: {sales_stats_by_year.loc[sales_stats_by_year['std'].idxmax(), 'Year']}
+Most stable year: {sales_stats_by_year.loc[sales_stats_by_year['std'].idxmin(), 'Year']}"""
+            
+            documents.append(Document(page_content=stats_doc, metadata={"source": "statistics"}))
+            
+            # Create vector store
+            st.session_state.vectorstore = Chroma.from_documents(
+                documents=documents,
+                embedding=embeddings
+            )
+            
+            st.session_state.data_loaded = True
+            )
+            
         else:
-            return "Chart displayed below."
-    
-    # For specific questions, show answer plus minimal context
-    elif specific_answer:
-        return specific_answer
-    
-    # For general questions, provide brief analysis
-    else:
-        if 'region' in question_lower:
-            return "Regional performance analysis shows geographic variations and opportunities for strategic focus."
-        elif 'product' in question_lower:
-            return "Product performance analysis reveals which offerings drive business success and portfolio optimization opportunities."
-        elif 'customer' in question_lower or 'demographic' in question_lower:
-            return "Customer segmentation analysis provides insights into target audience characteristics and behaviors."
-        elif 'trend' in question_lower or 'time' in question_lower or 'year' in question_lower:
-            return "Time-based analysis reveals business trends, patterns, and forecasting foundations."
-        else:
-            return "Business intelligence analysis provides key performance insights for strategic decision-making."
+            st.error("Please provide both API key and CSV file")
 
-# STEP 8: MEMORY INTEGRATION
-def initialize_memory():
-    """REQUIREMENT 6: Memory integration"""
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "conversation_history" not in st.session_state:
-        st.session_state.conversation_history = ""
-
-def update_memory(question, response):
-    """Update conversation memory"""
-    st.session_state.conversation_history += f"Q: {question}\nA: {response[:100]}...\n\n"
-    st.session_state.messages.append({"role": "user", "content": question})
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-# STEP 9: MODEL EVALUATION
-def run_evaluation(df, retriever):
-    """REQUIREMENT 7: Model evaluation"""
+# Main interface
+if st.session_state.data_loaded:
+    st.success("Choose an analysis below:")
     
-    test_questions = [
-        "What are the total sales?",
-        "Which region performs best?",
-        "What's the average sales amount?",
-        "Show me customer demographics",
-        "Analyze sales trends over time"
-    ]
+    # Create columns for buttons
+    col1, col2, col3, col4 = st.columns(4)
     
-    results = []
-    for question in test_questions:
-        answer = execute_chained_analysis(question, retriever, "", df)
-        context = retriever(question)
-        has_data = len(context) > 50
+    # Analysis functions
+    def get_ai_analysis(query, source_filter=None):
+        # Get relevant context
+        results = st.session_state.vectorstore.similarity_search(query, k=2)
+        if source_filter:
+            results = [doc for doc in results if doc.metadata.get('source') == source_filter]
         
-        results.append({
-            'question': question,
-            'answer': answer[:150] + "...",
-            'context_retrieved': len(context),
-            'evaluation': 'PASS' if has_data else 'FAIL'
-        })
-    
-    return results
-
-# STEP 10: VISUALIZATIONS
-def create_charts(df, chart_type):
-    """REQUIREMENT 7: Data visualizations"""
-    
-    if chart_type == 'sales_trends' and 'Year' in df.columns:
-        yearly_sales = df.groupby('Year')['Sales'].sum()
-        fig = px.bar(x=yearly_sales.index, y=yearly_sales.values, 
-                    title="Sales Trends Over Time",
-                    labels={'x': 'Year', 'y': 'Total Sales ($)'})
-        st.plotly_chart(fig, use_container_width=True)
-    
-    elif chart_type == 'products' and 'Product' in df.columns:
-        product_sales = df.groupby('Product')['Sales'].sum()
-        fig = px.bar(x=product_sales.index, y=product_sales.values,
-                    title="Product Performance Comparison",
-                    labels={'x': 'Product', 'y': 'Total Sales ($)'})
-        st.plotly_chart(fig, use_container_width=True)
-    
-    elif chart_type == 'regions' and 'Region' in df.columns:
-        regional_sales = df.groupby('Region')['Sales'].sum()
-        fig = px.pie(values=regional_sales.values, names=regional_sales.index,
-                    title="Regional Sales Analysis")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    elif chart_type == 'demographics' and 'Age_Group' in df.columns:
-        demo_data = df.groupby('Age_Group').size()
-        fig = px.bar(x=demo_data.index, y=demo_data.values,
-                    title="Customer Demographics by Age Group",
-                    labels={'x': 'Age Group', 'y': 'Number of Customers'})
-        st.plotly_chart(fig, use_container_width=True)
-
-# MAIN APPLICATION
-def main():
-    # Initialize everything
-    initialize_memory()
-    
-    # App title
-    st.title("InsightForge - AI Business Intelligence Assistant")
-    st.write("Complete Capstone Implementation with Prompt Chaining")
-    
-    # Load and process data
-    df = load_data()
-    summary = create_data_summary(df)
-    retriever = create_retriever(df)
-    
-    # Sidebar
-    with st.sidebar:
-        st.header("Data Overview")
-        st.write(f"Records: {len(df):,}")
-        st.write(f"Columns: {len(df.columns)}")
+        context = "\n".join([doc.page_content for doc in results])
         
-        if 'Date' in df.columns:
-            st.write(f"Date Range: {df['Date'].min().date()} to {df['Date'].max().date()}")
+        # Create analysis prompt
+        prompt = f"""
+        As a business intelligence expert, analyze this data and provide insights:
         
-        # Statistical measures
-        if 'stats' in summary:
-            st.subheader("Sales Statistics")
-            stats = summary['stats']
-            st.write(f"Mean: ${stats['mean']:,.2f}")
-            st.write(f"Median: ${stats['median']:,.2f}")
-            st.write(f"Std Dev: ${stats['std']:,.2f}")
+        Query: {query}
+        Data: {context}
         
-        # Analysis Features
-        st.header("Analysis Features")
+        Provide:
+        1. Key findings with specific numbers
+        2. Business implications
+        3. Actionable recommendations
         
-        if st.button("Generate Business Insights"):
-            with st.spinner("Generating insights using prompt chains..."):
-                insights = execute_chained_analysis(
-                    "Provide comprehensive business insights and recommendations", 
-                    retriever, 
-                    st.session_state.conversation_history,
-                    df
-                )
-                st.success("Insights Generated!")
-                with st.expander("Business Insights"):
-                    st.write(insights)
+        Analysis:
+        """
         
-        if st.button("Run System Evaluation"):
-            with st.spinner("Running evaluation..."):
-                eval_results = run_evaluation(df, retriever)
-                st.success("Evaluation Complete!")
-                with st.expander("Evaluation Results"):
-                    for result in eval_results:
-                        st.write(f"**Q:** {result['question']}")
-                        st.write(f"**A:** {result['answer']}")
-                        st.write(f"**Context:** {result['context_retrieved']} chars")
-                        st.write(f"**Status:** {result['evaluation']}")
-                        st.write("---")
+        response = st.session_state.chat_model.invoke(prompt)
+        return response.content
     
-    # Main chat interface
-    st.header("Chat with Your Data")
+    # Button 1: Highest Yearly Sales
+    with col1:
+        if st.button("Highest Yearly Sales", use_container_width=True):
+            st.subheader("Yearly Sales Analysis")
+            
+            # Show chart
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.barplot(data=st.session_state.yearly_sales, x='Year', y='Sales', ax=ax)
+            plt.title("Sales by Year")
+            plt.ylabel("Sales ($)")
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
+            
+            # AI Analysis
+            st.subheader("AI Insights")
+            analysis = get_ai_analysis("What are the yearly sales trends and performance?", "yearly_sales")
+            st.write(analysis)
     
-    # Display chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+    # Button 2: Best Performing Widget
+    with col2:
+        if st.button("Best Performing Product", use_container_width=True):
+            st.subheader("Product Performance Analysis")
+            
+            # Show chart
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.barplot(data=st.session_state.product_sales, x='Product', y='Sales', ax=ax)
+            plt.title("Sales by Product")
+            plt.ylabel("Sales ($)")
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
+            
+            # AI Analysis
+            st.subheader("AI Insights")
+            analysis = get_ai_analysis("Which products perform best and worst?", "product_sales")
+            st.write(analysis)
     
-    # Chat input
-    if prompt := st.chat_input("Ask about your business data..."):
-        # Display user message
-        with st.chat_message("user"):
-            st.write(prompt)
-        
-        # Generate chained analysis response
-        with st.chat_message("assistant"):
-            with st.spinner("Analyzing with prompt chains..."):
-                response = execute_chained_analysis(prompt, retriever, st.session_state.conversation_history, df)
-                st.write(response)
-                
-                # Show relevant charts
-                prompt_lower = prompt.lower()
-                if 'sales trends' in prompt_lower or 'time' in prompt_lower or 'year' in prompt_lower:
-                    create_charts(df, 'sales_trends')
-                elif 'product' in prompt_lower:
-                    create_charts(df, 'products')
-                elif 'region' in prompt_lower:
-                    create_charts(df, 'regions')
-                elif 'customer' in prompt_lower or 'demographic' in prompt_lower:
-                    create_charts(df, 'demographics')
-                
-                # Update memory
-                update_memory(prompt, response)
+    # Button 3: Statistical Data
+    with col3:
+        if st.button("Statistical Data", use_container_width=True):
+            st.subheader("Statistical Analysis")
+            
+            # Show statistics table
+            st.dataframe(st.session_state.sales_stats_by_year)
+            
+            # AI Analysis
+            st.subheader("AI Insights")
+            analysis = get_ai_analysis("What do the statistical measures tell us about sales performance?", "statistics")
+            st.write(analysis)
     
-    # Footer
+    # Button 4: Demographic Insights
+    with col4:
+        if st.button("Demographic Insights", use_container_width=True):
+            st.subheader("Demographic Analysis")
+            
+            # Show demographic data
+            st.dataframe(st.session_state.sales_age_gender)
+            
+            # Create demographic visualization
+            fig, ax = plt.subplots(figsize=(12, 6))
+            demo_pivot = st.session_state.sales_age_gender.pivot(index='Age_Group', columns='Customer_Gender', values='Total_Sales')
+            sns.heatmap(demo_pivot, annot=True, fmt='.0f', ax=ax)
+            plt.title("Sales by Demographics")
+            st.pyplot(fig)
+            
+            # AI Analysis
+            st.subheader("AI Insights")
+            analysis = get_ai_analysis("What demographic insights can we extract from the sales data?", "demographics")
+            st.write(analysis)
+    
+    # Additional custom question section
     st.markdown("---")
-    st.markdown("Capstone Project: Complete AI Business Intelligence System with Prompt Chaining")
+    st.subheader("💬 Ask a Custom Question")
+    
+    custom_question = st.text_input("Ask anything about your sales data:")
+    if st.button("Get Answer"):
+        if custom_question:
+            analysis = get_ai_analysis(custom_question)
+            st.write(analysis)
 
-if __name__ == "__main__":
-    main()
+else:
+    st.info("Please set up your API key and upload your sales data in the sidebar to get started.")
+    
+    # Show sample data format
+    st.subheader("Expected CSV Format")
+    st.markdown("""
+    Your CSV should contain columns like:
+    - `Date`: Sales date
+    - `Sales`: Sales amount
+    - `Product`: Product name
+    - `Region`: Sales region
+    - `Customer_Age`: Customer age
+    - `Customer_Gender`: Customer gender
+    - `Customer_Satisfaction`: Satisfaction score
+    """)
+
+
+
+# DATA ANALYSIS & PREPARATION
+# Ensure 'Date' column is datetime type and extract 'Year'
+df['Date'] = pd.to_datetime(df['Date'])
+df['Year'] = df['Date'].dt.year
+
+# 1. Yearly Sales Analysis
+yearly_sales = df.groupby(['Year'])['Sales'].sum().reset_index()
+yearly_sales.to_csv('yearly_sales.csv', index=False)
+display(yearly_sales)
+
+# 2. Product and Regional Analysis
+sales_by_widget_year_region = df.groupby(['Year', 'Product', 'Region'])['Sales'].sum().reset_index()
+pivot_table_widget_region = sales_by_widget_year_region.pivot_table(
+    index=['Product', 'Region'],
+    columns='Year',
+    values='Sales',
+    fill_value=0
+)
+display(pivot_table_widget_region)
+
+# Save the pivot table correctly
+pivot_table_widget_region.to_csv('regional_widget_sales.csv', index=True)
+
+# 3. Customer Demographics Analysis
+# Create age groups from Customer_Age
+bins = [0, 18, 25, 35, 50, 65, np.inf]
+labels = ['<18', '18-24', '25-34', '35-49', '50-64', '65+']
+df['Age_Group'] = pd.cut(df['Customer_Age'], bins=bins, labels=labels, right=False)
+
+sales_age_gender = df.groupby(['Customer_Gender', 'Age_Group'], observed=True).agg(
+    Total_Sales=('Sales', 'sum'),
+    Average_Sales=('Sales', 'mean'),
+    Average_Customer_Satisfaction=('Customer_Satisfaction', 'mean')
+).reset_index()
+display(sales_age_gender)
+sales_age_gender.to_csv('customer_demographics.csv', index=False)
+
+# 4. Statistical Analysis by Year
+sales_stats_by_year = df.groupby(['Year'])['Sales'].agg(['mean', 'median', 'std', 'min', 'max']).reset_index()
+display(sales_stats_by_year)
+sales_stats_by_year.to_csv('sales_stats_by_year.csv', index=False)
+
+# 5. Create Visualizations for RAG Input
+product_sales = df.groupby('Product')['Sales'].sum().reset_index().sort_values('Sales', ascending=False)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Product', y='Sales', data=product_sales)
+plt.xlabel("Product")
+plt.ylabel("Total Sales")
+plt.title("Total Sales by Product")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('product_sales_chart.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# Regional sales visualization
+regional_sales = df.groupby('Region')['Sales'].sum().reset_index().sort_values('Sales', ascending=False)
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Region', y='Sales', data=regional_sales)
+plt.xlabel("Region")
+plt.ylabel("Total Sales")
+plt.title("Total Sales by Region")
+plt.tight_layout()
+plt.savefig('regional_sales_chart.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# RAG SYSTEM SETUP
+# ================================
+
+def prepare_documents_for_rag():
+    """
+    Convert analysis results and insights into documents for RAG system
+    """
+    documents = []
+
+    # Document 1: Yearly Sales Summary
+    max_year = yearly_sales.loc[yearly_sales['Sales'].idxmax(), 'Year']
+    max_sales = yearly_sales['Sales'].max()
+    min_year = yearly_sales.loc[yearly_sales['Sales'].idxmin(), 'Year']
+    min_sales = yearly_sales['Sales'].min()
+    avg_sales = yearly_sales['Sales'].mean()
+
+    yearly_summary = f"""
+    YEARLY SALES ANALYSIS:
+    {yearly_sales.to_string(index=False)}
+
+    Key Insights:
+    - Total years analyzed: {len(yearly_sales)}
+    - Best performing year: {max_year} with ${max_sales:,.2f}
+    - Worst performing year: {min_year} with ${min_sales:,.2f}
+    - Average yearly sales: ${avg_sales:,.2f}
+    """
+    documents.append(Document(page_content=yearly_summary, metadata={"source": "yearly_sales", "type": "summary"}))
+
+    # Document 2: Product Performance
+    top_product = product_sales.iloc[0]['Product']
+    top_product_sales = product_sales.iloc[0]['Sales']
+    bottom_product = product_sales.iloc[-1]['Product']
+    bottom_product_sales = product_sales.iloc[-1]['Sales']
+
+    product_summary = f"""
+    PRODUCT PERFORMANCE ANALYSIS:
+    {product_sales.to_string(index=False)}
+
+    Key Insights:
+    - Best performing product: {top_product} with ${top_product_sales:,.2f}
+    - Worst performing product: {bottom_product} with ${bottom_product_sales:,.2f}
+    - Total products analyzed: {len(product_sales)}
+    - Performance gap: ${top_product_sales - bottom_product_sales:,.2f}
+    """
+    documents.append(Document(page_content=product_summary, metadata={"source": "product_sales", "type": "summary"}))
+
+    # Document 3: Regional Analysis
+    top_region = regional_sales.iloc[0]['Region']
+    top_region_sales = regional_sales.iloc[0]['Sales']
+    bottom_region = regional_sales.iloc[-1]['Region']
+    bottom_region_sales = regional_sales.iloc[-1]['Sales']
+
+    regional_summary = f"""
+    REGIONAL SALES ANALYSIS:
+    {regional_sales.to_string(index=False)}
+
+    Key Insights:
+    - Best performing region: {top_region} with ${top_region_sales:,.2f}
+    - Worst performing region: {bottom_region} with ${bottom_region_sales:,.2f}
+    - Total regions analyzed: {len(regional_sales)}
+    - Regional performance gap: ${top_region_sales - bottom_region_sales:,.2f}
+    """
+    documents.append(Document(page_content=regional_summary, metadata={"source": "regional_sales", "type": "summary"}))
+
+    # Document 4: Customer Demographics
+    best_demo_idx = sales_age_gender['Total_Sales'].idxmax()
+    worst_demo_idx = sales_age_gender['Total_Sales'].idxmin()
+
+    best_gender = sales_age_gender.loc[best_demo_idx, 'Customer_Gender']
+    best_age_group = sales_age_gender.loc[best_demo_idx, 'Age_Group']
+    best_demo_sales = sales_age_gender.loc[best_demo_idx, 'Total_Sales']
+
+    worst_gender = sales_age_gender.loc[worst_demo_idx, 'Customer_Gender']
+    worst_age_group = sales_age_gender.loc[worst_demo_idx, 'Age_Group']
+    worst_demo_sales = sales_age_gender.loc[worst_demo_idx, 'Total_Sales']
+
+    highest_satisfaction = sales_age_gender['Average_Customer_Satisfaction'].max()
+    lowest_satisfaction = sales_age_gender['Average_Customer_Satisfaction'].min()
+
+    demo_summary = f"""
+    CUSTOMER DEMOGRAPHICS ANALYSIS:
+    {sales_age_gender.to_string(index=False)}
+
+    Key Insights:
+    - Best performing demographic: {best_gender} {best_age_group} with ${best_demo_sales:,.2f}
+    - Worst performing demographic: {worst_gender} {worst_age_group} with ${worst_demo_sales:,.2f}
+    - Highest customer satisfaction: {highest_satisfaction:.2f}
+    - Lowest customer satisfaction: {lowest_satisfaction:.2f}
+    - Total demographic segments: {len(sales_age_gender)}
+    """
+    documents.append(Document(page_content=demo_summary, metadata={"source": "demographics", "type": "summary"}))
+
+    # Document 5: Statistical Summary
+    stats_summary = f"""
+    STATISTICAL ANALYSIS BY YEAR:
+    {sales_stats_by_year.to_string(index=False)}
+
+    Key Statistical Insights:
+    - Overall sales trend shows variation across years
+    - Highest average sales year: {sales_stats_by_year.loc[sales_stats_by_year['mean'].idxmax(), 'Year']}
+    - Lowest average sales year: {sales_stats_by_year.loc[sales_stats_by_year['mean'].idxmin(), 'Year']}
+    - Most volatile year (highest std): {sales_stats_by_year.loc[sales_stats_by_year['std'].idxmax(), 'Year']}
+    - Most stable year (lowest std): {sales_stats_by_year.loc[sales_stats_by_year['std'].idxmin(), 'Year']}
+    - Standard deviation indicates sales volatility
+    - Median vs mean comparison shows distribution characteristics
+    """
+    documents.append(Document(page_content=stats_summary, metadata={"source": "statistics", "type": "summary"}))
+
+    return documents
+
+# Create documents for RAG
+
+
+rag_documents = prepare_documents_for_rag()
+
+
+# Initialize embeddings and vector store
+embeddings = OpenAIEmbeddings()
+
+
+# Create vector store with the documents
+vectorstore = Chroma.from_documents(
+    documents=rag_documents,
+    embedding=embeddings,
+    persist_directory="./chroma_db"
+)
