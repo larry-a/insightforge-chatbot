@@ -7,6 +7,10 @@ import plotly.express as px
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
+# Clear cache when code changes to avoid issues
+if 'app_version' not in st.session_state:
+    st.session_state.app_version = 1
+
 st.set_page_config(page_title="InsightForge - AI Business Intelligence", layout="wide")
 
 @st.cache_data
@@ -163,34 +167,9 @@ def main():
     context = create_analysis_context(yearly_sales, pivot_table_widget_region, sales_age_gender, sales_stats_by_year)
     chat_model = setup_chat_model()
     
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if st.button("Highest Yearly Sales"):
-            response = get_ai_response("Which year had the highest sales and what were the numbers?", context, chat_model)
-            st.write(response)
-            create_chart(df, 'yearly')
-    
-    with col2:
-        if st.button("Best Performing Product"):
-            response = get_ai_response("Which product performs best and worst? Show me the numbers.", context, chat_model)
-            st.write(response)
-            create_chart(df, 'products')
-    
-    with col3:
-        if st.button("Statistical Data"):
-            response = get_ai_response("Give me a statistical summary of the sales data with key metrics.", context, chat_model)
-            st.write(response)
-    
-    with col4:
-        if st.button("Demographic Insights"):
-            response = get_ai_response("What demographic insights can you provide from the sales data?", context, chat_model)
-            st.write(response)
-            create_chart(df, 'demographics')
-    
-    st.subheader("Ask Your Own Question")
+    st.subheader("Ask Your Question")
     user_question = st.text_input("Enter your question:")
-    if st.button("Get Answer") and user_question:
+    if user_question:
         response = get_ai_response(user_question, context, chat_model)
         st.write(response)
 
