@@ -168,7 +168,6 @@ def main():
     # Check if data file exists
     try:
         df = load_data()
-        st.success(f"✅ Data loaded: {len(df)} rows")
     except FileNotFoundError:
         st.error("❌ sales_data.csv file not found! Please upload your data file.")
         st.info("Your CSV should have columns: Date, Sales, Customer_Age, Product, Region, Customer_Gender, Customer_Satisfaction")
@@ -211,17 +210,7 @@ def main():
         
         # Show visualization
         st.subheader("Data Visualization")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("Show Yearly Sales"):
-                create_chart(df, 'yearly')
-        with col2:
-            if st.button("Show Product Sales"):
-                create_chart(df, 'products')
-        with col3:
-            if st.button("Show Demographics"):
-                create_chart(df, 'demographics')
+        create_chart(df, 'yearly')
 
 if __name__ == "__main__":
     main()
